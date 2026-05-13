@@ -52,11 +52,11 @@ export type MailOptions = {
 	fetchUnreadOnStart?: boolean;
 } & Config;
 
-export class EmailListener extends EventEmitter<{
+export default class EmailListener extends EventEmitter<{
 	error: [Error];
 	"server:connected": [];
 	"server:disconnected": [];
-	mail: [ParsedMail, number, Imap.ImapMessageAttributes];
+	mail: [ParsedMail, number, Imap.ImapMessageAttributes | undefined];
 }> {
 	#imap: Imap;
 
@@ -71,24 +71,25 @@ export class EmailListener extends EventEmitter<{
 	constructor(options: MailOptions) {
 		super();
 
-		this.markSeen = options.markSeen ?? true;
-		this.mailbox = options.mailbox ?? "INBOX";
+		const {
+			markSeen,
+			mailbox,
+			searchFilter,
+			fetchUnreadOnStart,
+			tls,
+			...imapConfig
+		} = options;
 
-		this.searchFilter = options.searchFilter || ["UNSEEN"];
+		this.markSeen = markSeen ?? true;
+		this.mailbox = mailbox ?? "INBOX";
 
-		this.fetchUnreadOnStart = options.fetchUnreadOnStart ?? true;
+		this.searchFilter = searchFilter ?? ["UNSEEN"];
+
+		this.fetchUnreadOnStart = fetchUnreadOnStart ?? true;
 
 		this.#imap = new Imap({
-			authTimeout: options.authTimeout,
-			connTimeout: options.connTimeout,
-			debug: options.debug,
-			host: options.host,
-			password: options.password,
-			port: options.port,
-			tls: options.tls || true,
-			tlsOptions: options.tlsOptions || { rejectUnauthorized: false },
-			user: options.user,
-			xoauth2: options.xoauth2,
+			...imapConfig,
+			tls: tls ?? true,
 		});
 
 		this.#imap.once("ready", this.imapReady.bind(this));
@@ -138,28 +139,36 @@ export class EmailListener extends EventEmitter<{
 				this.emit("error", err);
 			} else if (results.length > 0) {
 				for (const result of results) {
-					const f = this.#imap.fetch(result, {
+					const fetch = this.#imap.fetch(result, {
 						bodies: "",
 						markSeen: this.markSeen,
 					});
 
-					f.once("error", (error) => {
+					fetch.once("error", (error) => {
 						this.emit("error", error);
 					});
 
-					f.on("message", this.handleMessage.bind(this));
+					fetch.once("message", this.handleMessage.bind(this));
 				}
 			}
 		});
 	}
 
 	private handleMessage(message: Imap.ImapMessage, seqno: number) {
-		let attributes: Imap.ImapMessageAttributes;
+		let attributes: Imap.ImapMessageAttributes | undefined;
+
+		message.on("attributes", (attrs) => {
+			attributes = attrs;
+		});
 
 		message.on("body", (stream) => {
 			let data = "";
 			stream.on("data", (chunk) => {
 				data += chunk.toString("UTF-8");
+			});
+
+			stream.once("error", (err) => {
+				this.emit("error", err);
 			});
 
 			stream.once("end", () => {
@@ -172,10 +181,6 @@ export class EmailListener extends EventEmitter<{
 					this.emit("mail", mail, seqno, attributes);
 				});
 			});
-		});
-
-		message.on("attributes", (attrs) => {
-			attributes = attrs;
 		});
 	}
 }

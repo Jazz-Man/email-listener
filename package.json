@@ -1,0 +1,16 @@
+{
+  "name": "email-listener",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@tsconfig/bun": "^1.0.10",
+    "@types/bun": "latest",
+    "@types/imap": "^0.8.43",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^25.7.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

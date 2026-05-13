@@ -7,9 +7,8 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import { simpleParser } from "mailparser";
-import EmailListener from "../src/index.ts";
 import type { MailOptions } from "../src/index.ts";
+import EmailListener from "../src/index.ts";
 import { createMockImap } from "./helpers/mock-imap.ts";
 import { createMockSimpleParser } from "./helpers/mock-mailparser.ts";
 import {
@@ -21,9 +20,6 @@ import {
 
 const imap = createMockImap();
 const parser = createMockSimpleParser();
-
-// Replace simpleParser at module level
-const _originalSimpleParser = simpleParser;
 
 function flushMicrotasks(): Promise<void> {
 	return new Promise((resolve) => setImmediate(resolve));

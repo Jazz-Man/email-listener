@@ -1,106 +1,39 @@
+# CLAUDE.md
 
-Default to using Bun instead of Node.js.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Project
 
-## APIs
+`@jazz-man/email-listener` — a TypeScript library that connects to an IMAP server and emits parsed email objects via Node.js `EventEmitter` when new mail arrives. Wraps `imap` (IMAP connectivity) and `mailparser` (MIME parsing).
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Commands
 
-## Testing
+- **Lint/Format:** `bunx biome check src/` (lint + format check), `bunx biome check --write src/` (auto-fix)
+- **Tests:** `bun test` (test root is `./tests` per `bunfig.toml`, no tests exist yet)
+- **Install:** `bun install`
 
-Use `bun test` to run tests.
+No build step — `package.json` `"module"` points directly to `src/index.ts`. Bun and bundlers consume the TypeScript source directly.
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+## Architecture
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
+Single-file library: `src/index.ts` (~183 lines).
 
-## Frontend
+**Exports:**
+- `EmailListener` class — extends `EventEmitter`, manages IMAP lifecycle
+- `MailOptions` type — config (IMAP credentials, `markSeen`, `mailbox`, `searchFilter`, `fetchUnreadOnStart`)
+- `TSearchCriteria` type — IMAP search criteria union (including Gmail extensions like `X-GM-RAW`)
+- `TParsedMail` type — re-export of `ParsedMail` from `mailparser`
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+**Events:** `mail` (parsed email + seqno + attrs), `server:connected`, `server:disconnected`, `error`
 
-Server:
+**Data flow:** `start()` → IMAP connect → `imapReady()` → open mailbox → `parseUnread()` (if `fetchUnreadOnStart`) → search + fetch each message → `handleMessage()` → stream body → `simpleParser` → emit `mail`. On new mail notifications, `imapMail()` → `parseUnread()` again.
 
-```ts#index.ts
-import index from "./index.html"
+**Patch:** `patches/utf7@1.0.2.patch` modernizes the transitive `utf7` dependency (removes `semver`, converts to ESM). Managed via `patchedDependencies` in `package.json`.
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+## Conventions
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+- Use Bun instead of Node.js (`bun`, `bun test`, `bun install`, `bunx`)
+- Bun auto-loads `.env` — no `dotenv` needed
+- Formatter: tabs, double quotes (configured in `biome.json`)
+- Biome for linting and formatting — not ESLint/Prettier
+- `tsconfig.json` extends `@tsconfig/bun` with `strictNullChecks`, `exactOptionalPropertyTypes`, `esModuleInterop`

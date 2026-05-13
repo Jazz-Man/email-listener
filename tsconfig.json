@@ -1,13 +1,11 @@
 {
 	"$schema": "https://json.schemastore.org/tsconfig",
 	"compilerOptions": {
-		"allowImportingTsExtensions": false,
 		"allowJs": true,
 		"downlevelIteration": true,
 		"esModuleInterop": true,
 		"exactOptionalPropertyTypes": true,
 		"forceConsistentCasingInFileNames": true,
-		"isolatedModules": true,
 		"lib": ["esnext", "DOM"],
 		"preserveSymlinks": false,
 		"resolveJsonModule": true,

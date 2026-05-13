@@ -14,6 +14,7 @@ export interface MockImapControls {
 	setSearchResults(uids: number[]): void;
 	setSearchError(err: Error): void;
 	setFetchError(err: Error): void;
+	setStreamError(err: Error): void;
 	addFetchMessage(
 		bodyData: string,
 		seqno: number,
@@ -48,6 +49,8 @@ export function createMockImap(): MockImapControls {
 		msg: MockImapMessage;
 		seqno: number;
 	}> = [];
+
+	let streamError: Error | null = null;
 
 	const connectMock = mock(function (this: any) {
 		capturedInstance = this;
@@ -127,9 +130,10 @@ export function createMockImap(): MockImapControls {
 	return {
 		addFetchMessage: (bodyData, seqno, attrs) => {
 			fetchMessages.push({
-				msg: new MockImapMessage(bodyData, attrs),
+				msg: new MockImapMessage(bodyData, attrs, streamError),
 				seqno,
 			});
+			streamError = null;
 		},
 
 		connectMock,
@@ -164,6 +168,7 @@ export function createMockImap(): MockImapControls {
 			searchError = null;
 			fetchError = null;
 			fetchMessages = [];
+			streamError = null;
 			connectMock.mockClear();
 			endMock.mockClear();
 			openBoxMock.mockClear();
@@ -184,21 +189,30 @@ export function createMockImap(): MockImapControls {
 		setSearchResults: (uids) => {
 			searchResults = uids;
 		},
+		setStreamError: (err) => {
+			streamError = err;
+		},
 	};
 }
 
 class MockImapMessage extends EventEmitter {
 	private bodyData: string;
 	private attrs: Imap.ImapMessageAttributes;
+	private streamErr: Error | null;
 
-	constructor(bodyData: string, attrs: Imap.ImapMessageAttributes) {
+	constructor(
+		bodyData: string,
+		attrs: Imap.ImapMessageAttributes,
+		streamErr: Error | null = null,
+	) {
 		super();
 		this.bodyData = bodyData;
 		this.attrs = attrs;
+		this.streamErr = streamErr;
 	}
 
 	deliver(): void {
-		const stream = new MockReadableStream(this.bodyData);
+		const stream = new MockReadableStream(this.bodyData, this.streamErr);
 		this.emit("body", stream, { size: this.bodyData.length, which: "TEXT" });
 		this.emit("attributes", this.attrs);
 		stream.start();
@@ -207,14 +221,20 @@ class MockImapMessage extends EventEmitter {
 
 class MockReadableStream extends EventEmitter {
 	private data: string;
+	private streamErr: Error | null;
 
-	constructor(data: string) {
+	constructor(data: string, streamErr: Error | null = null) {
 		super();
 		this.data = data;
+		this.streamErr = streamErr;
 	}
 
 	start(): void {
 		setImmediate(() => {
+			if (this.streamErr) {
+				this.emit("error", this.streamErr);
+				return;
+			}
 			this.emit("data", Buffer.from(this.data, "utf-8"));
 			this.emit("end");
 		});

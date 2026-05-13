@@ -1,29 +1,12 @@
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-} from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { MailOptions } from "../src/index.ts";
 import EmailListener from "../src/index.ts";
-import { createMockImap } from "./helpers/mock-imap.ts";
-import { createMockSimpleParser } from "./helpers/mock-mailparser.ts";
+import { imap } from "./helpers/setup.ts";
 import {
 	DEFAULT_CONFIG,
 	SAMPLE_ATTRIBUTES,
-	SAMPLE_PARSED_MAIL,
 	SAMPLE_RAW_EMAIL,
 } from "./helpers/test-data.ts";
-
-const imap = createMockImap();
-const parser = createMockSimpleParser();
-
-function flushMicrotasks(): Promise<void> {
-	return new Promise((resolve) => setImmediate(resolve));
-}
 
 function waitForEvent(
 	emitter: { once(event: string, cb: (...args: any[]) => void): void },
@@ -42,69 +25,50 @@ function waitForEvent(
 	});
 }
 
-beforeAll(() => {
-	imap.install();
-	// Patch simpleParser by replacing it on the mailparser module
-	// Since we can't easily mock mailparser, we'll test through the Imap mock
-});
-
-afterAll(() => {
-	imap.restore();
-});
+function createAndConnect(options: Partial<MailOptions> = {}): EmailListener {
+	const listener = new EmailListener({ ...DEFAULT_CONFIG, ...options });
+	listener.start();
+	return listener;
+}
 
 beforeEach(() => {
 	imap.reset();
-	parser.fn.mockClear();
-	parser.setResult(SAMPLE_PARSED_MAIL);
 });
-
-afterEach(() => {
-	imap.restore();
-});
-
-function createListener(options: Partial<MailOptions> = {}): EmailListener {
-	imap.install();
-	return new EmailListener({ ...DEFAULT_CONFIG, ...options });
-}
 
 describe("EmailListener", () => {
 	describe("constructor", () => {
 		test("applies custom mailbox name", () => {
-			const listener = createListener({ mailbox: "[Gmail]/All Mail" });
 			imap.addFetchMessage(SAMPLE_RAW_EMAIL, 1, SAMPLE_ATTRIBUTES);
 			imap.setSearchResults([1]);
 
-			listener.start();
+			createAndConnect({ mailbox: "[Gmail]/All Mail" });
 			imap.emitReady();
 
 			expect(imap.openBoxMock.mock.calls[0][0]).toBe("[Gmail]/All Mail");
 		});
 
 		test("applies custom searchFilter", () => {
-			const listener = createListener({ searchFilter: ["SEEN"] });
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect({ searchFilter: ["SEEN"] });
 			imap.emitReady();
 
 			expect(imap.searchMock.mock.calls[0][0]).toEqual(["SEEN"]);
 		});
 
 		test("defaults searchFilter to UNSEEN", () => {
-			const listener = createListener();
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.searchMock.mock.calls[0][0]).toEqual(["UNSEEN"]);
 		});
 
 		test("defaults markSeen to true", () => {
-			const listener = createListener();
 			imap.setSearchResults([1]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls[0][1]).toEqual({
@@ -116,13 +80,12 @@ describe("EmailListener", () => {
 
 	describe("start / stop", () => {
 		test("start() calls imap.connect()", () => {
-			const listener = createListener();
-			listener.start();
+			createAndConnect();
 			expect(imap.connectMock).toHaveBeenCalled();
 		});
 
 		test("stop() calls imap.end()", () => {
-			const listener = createListener();
+			const listener = new EmailListener(DEFAULT_CONFIG);
 			listener.stop();
 			expect(imap.endMock).toHaveBeenCalled();
 		});
@@ -130,79 +93,65 @@ describe("EmailListener", () => {
 
 	describe("connection lifecycle", () => {
 		test("emits server:connected after mailbox opens", () => {
-			const listener = createListener();
 			let connected = false;
+			imap.setSearchResults([]);
 
+			const listener = createAndConnect();
 			listener.on("server:connected", () => {
 				connected = true;
 			});
-			imap.setSearchResults([]);
-
-			listener.start();
 			imap.emitReady();
 
 			expect(connected).toBe(true);
 		});
 
 		test("emits server:disconnected on close", () => {
-			const listener = createListener();
 			let disconnected = false;
 
+			const listener = createAndConnect();
 			listener.on("server:disconnected", () => {
 				disconnected = true;
 			});
-
-			listener.start();
 			imap.emitClose();
 
 			expect(disconnected).toBe(true);
 		});
 
 		test("full happy path lifecycle", async () => {
-			const listener = createListener();
 			const events: string[] = [];
+			imap.setSearchResults([1]);
+			imap.addFetchMessage(SAMPLE_RAW_EMAIL, 1, SAMPLE_ATTRIBUTES);
 
+			const listener = createAndConnect();
 			listener.on("server:connected", () => events.push("connected"));
 			listener.on("mail", () => events.push("mail"));
 			listener.on("server:disconnected", () => events.push("disconnected"));
 
-			imap.setSearchResults([1]);
-			imap.addFetchMessage(SAMPLE_RAW_EMAIL, 1, SAMPLE_ATTRIBUTES);
-
 			const mailPromise = waitForEvent(listener, "mail");
-
-			listener.start();
 			imap.emitReady();
-
 			await mailPromise;
-
-			expect(events).toContain("connected");
-			expect(events).toContain("mail");
 
 			listener.stop();
 			imap.emitClose();
 
-			expect(events).toContain("disconnected");
 			expect(events).toEqual(["connected", "mail", "disconnected"]);
 		});
 	});
 
 	describe("parseUnread", () => {
 		test("does not call fetch when search returns empty results", () => {
-			const listener = createListener();
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock).not.toHaveBeenCalled();
 		});
 
 		test("fetches each UID from search results", () => {
-			const listener = createListener();
 			imap.setSearchResults([1, 2, 3]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls.length).toBe(3);
@@ -212,38 +161,28 @@ describe("EmailListener", () => {
 		});
 
 		test("emits mail event for each fetched message", async () => {
-			const listener = createListener();
 			const mailSeqnos: number[] = [];
+			imap.setSearchResults([10, 20]);
+			imap.addFetchMessage("body1", 10, { ...SAMPLE_ATTRIBUTES, uid: 10 });
+			imap.addFetchMessage("body2", 20, { ...SAMPLE_ATTRIBUTES, uid: 20 });
 
+			const listener = createAndConnect();
 			listener.on("mail", (_mail: any, seqno: number) => {
 				mailSeqnos.push(seqno);
 			});
 
-			imap.setSearchResults([10, 20]);
-			imap.addFetchMessage("body1", 10, {
-				...SAMPLE_ATTRIBUTES,
-				uid: 10,
-			});
-			imap.addFetchMessage("body2", 20, {
-				...SAMPLE_ATTRIBUTES,
-				uid: 20,
-			});
-
-			listener.start();
 			imap.emitReady();
-
 			for (let i = 0; i < 10; i++) {
-				await flushMicrotasks();
+				await new Promise((r) => setImmediate(r));
 			}
 
 			expect(mailSeqnos).toEqual([10, 20]);
 		});
 
 		test("fetch options use bodies empty string", () => {
-			const listener = createListener();
 			imap.setSearchResults([1]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls[0][1]).toMatchObject({
@@ -254,65 +193,59 @@ describe("EmailListener", () => {
 
 	describe("handleMessage", () => {
 		test("emits mail with correct seqno and attributes", async () => {
-			const listener = createListener();
-			let _receivedMail: any = null;
-			let receivedSeqno: any = null;
-			let receivedAttrs: any = null;
-
-			listener.on("mail", (mail, seqno, attrs) => {
-				_receivedMail = mail;
-				receivedSeqno = seqno;
-				receivedAttrs = attrs;
-			});
-
 			imap.setSearchResults([5]);
 			imap.addFetchMessage(SAMPLE_RAW_EMAIL, 5, SAMPLE_ATTRIBUTES);
 
+			const listener = createAndConnect();
 			const mailPromise = waitForEvent(listener, "mail");
+			imap.emitReady();
+			const [_mail, seqno, attrs] = await mailPromise;
 
-			listener.start();
+			expect(seqno).toBe(5);
+			expect(attrs).toEqual(SAMPLE_ATTRIBUTES);
+		});
+
+		test("body stream error emits error event", async () => {
+			imap.setSearchResults([1]);
+			imap.setStreamError(new Error("stream broken"));
+			imap.addFetchMessage("data", 1, SAMPLE_ATTRIBUTES);
+
+			const listener = createAndConnect();
 			imap.emitReady();
 
-			await mailPromise;
-
-			expect(receivedSeqno).toBe(5);
-			expect(receivedAttrs).toEqual(SAMPLE_ATTRIBUTES);
+			const [err] = await waitForEvent(listener, "error");
+			expect(err).toBeInstanceOf(Error);
+			expect(err.message).toBe("stream broken");
 		});
 	});
 
 	describe("error scenarios", () => {
 		test("openBox error emits error event", () => {
-			const listener = createListener();
-			let receivedError: Error | null = null;
+			imap.setOpenBoxError(new Error("mailbox not found"));
 
+			const listener = createAndConnect();
+			let receivedError: Error | null = null;
 			listener.on("error", (err: Error) => {
 				receivedError = err;
 			});
-
-			imap.setOpenBoxError(new Error("mailbox not found"));
-
-			listener.start();
 			imap.emitReady();
 
 			expect(receivedError).toBeInstanceOf(Error);
-			expect(receivedError?.message).toBe("mailbox not found");
+			expect(receivedError!.message).toBe("mailbox not found");
 		});
 
 		test("openBox error prevents server:connected", () => {
-			const listener = createListener();
+			imap.setOpenBoxError(new Error("mailbox not found"));
+
+			const listener = createAndConnect();
 			let connected = false;
 			let receivedError: Error | null = null;
-
 			listener.on("server:connected", () => {
 				connected = true;
 			});
 			listener.on("error", (err: Error) => {
 				receivedError = err;
 			});
-
-			imap.setOpenBoxError(new Error("mailbox not found"));
-
-			listener.start();
 			imap.emitReady();
 
 			expect(connected).toBe(false);
@@ -320,17 +253,13 @@ describe("EmailListener", () => {
 		});
 
 		test("openBox error prevents mail/update listener registration", () => {
-			const listener = createListener();
-			listener.on("error", () => {}); // prevent unhandled error
-
 			imap.setOpenBoxError(new Error("mailbox not found"));
 
-			listener.start();
+			const listener = createAndConnect();
+			listener.on("error", () => {});
 			imap.emitReady();
 
-			// search should only be called once (from openBox flow), not from mail/update
 			const callsBefore = imap.searchMock.mock.calls.length;
-
 			imap.emitMail();
 			imap.emitUpdate();
 
@@ -338,69 +267,56 @@ describe("EmailListener", () => {
 		});
 
 		test("search error emits error event", () => {
-			const listener = createListener();
-			let receivedError: Error | null = null;
+			imap.setSearchError(new Error("search failed"));
 
+			const listener = createAndConnect();
+			let receivedError: Error | null = null;
 			listener.on("error", (err: Error) => {
 				receivedError = err;
 			});
-
-			imap.setSearchError(new Error("search failed"));
-
-			listener.start();
 			imap.emitReady();
 
 			expect(receivedError).toBeInstanceOf(Error);
-			expect(receivedError?.message).toBe("search failed");
+			expect(receivedError!.message).toBe("search failed");
 		});
 
 		test("fetch error emits error event", async () => {
-			const listener = createListener();
-			const errorPromise = waitForEvent(listener, "error");
-
 			imap.setSearchResults([1]);
 			imap.setFetchError(new Error("fetch failed"));
 
-			listener.start();
+			const listener = createAndConnect();
 			imap.emitReady();
 
-			const [receivedError] = await errorPromise;
-
-			expect(receivedError).toBeInstanceOf(Error);
-			expect(receivedError.message).toBe("fetch failed");
+			const [err] = await waitForEvent(listener, "error");
+			expect(err).toBeInstanceOf(Error);
+			expect(err.message).toBe("fetch failed");
 		});
 
 		test("IMAP connection error emits error event", () => {
-			const listener = createListener();
+			const listener = createAndConnect();
 			let receivedError: Error | null = null;
-
 			listener.on("error", (err: Error) => {
 				receivedError = err;
 			});
-
-			listener.start();
 			imap.emitError(new Error("connection lost"));
 
 			expect(receivedError).toBeInstanceOf(Error);
-			expect(receivedError?.message).toBe("connection lost");
+			expect(receivedError!.message).toBe("connection lost");
 		});
 	});
 
 	describe("option behaviors", () => {
 		test("fetchUnreadOnStart=false skips initial parseUnread", () => {
-			const listener = createListener({ fetchUnreadOnStart: false });
-
-			listener.start();
+			createAndConnect({ fetchUnreadOnStart: false });
 			imap.emitReady();
 
 			expect(imap.searchMock).not.toHaveBeenCalled();
 		});
 
 		test("fetchUnreadOnStart=false still processes mail notifications", () => {
-			const listener = createListener({ fetchUnreadOnStart: false });
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect({ fetchUnreadOnStart: false });
 			imap.emitReady();
 
 			expect(imap.searchMock).not.toHaveBeenCalled();
@@ -411,10 +327,9 @@ describe("EmailListener", () => {
 		});
 
 		test("markSeen=false passes through to fetch options", () => {
-			const listener = createListener({ markSeen: false });
 			imap.setSearchResults([1]);
 
-			listener.start();
+			createAndConnect({ markSeen: false });
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls[0][1]).toMatchObject({
@@ -423,10 +338,9 @@ describe("EmailListener", () => {
 		});
 
 		test("markSeen=true (default) passes through to fetch options", () => {
-			const listener = createListener();
 			imap.setSearchResults([1]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls[0][1]).toMatchObject({
@@ -435,12 +349,11 @@ describe("EmailListener", () => {
 		});
 
 		test("custom searchFilter is used in search", () => {
-			const listener = createListener({
-				searchFilter: ["FROM", "boss@company.com"] as any,
-			});
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect({
+				searchFilter: ["FROM", "boss@company.com"] as any,
+			});
 			imap.emitReady();
 
 			expect(imap.searchMock.mock.calls[0][0]).toEqual([
@@ -452,10 +365,9 @@ describe("EmailListener", () => {
 
 	describe("IMAP event notifications", () => {
 		test("mail event triggers parseUnread", () => {
-			const listener = createListener();
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			const initialCalls = imap.searchMock.mock.calls.length;
@@ -467,10 +379,9 @@ describe("EmailListener", () => {
 		});
 
 		test("update event triggers parseUnread", () => {
-			const listener = createListener();
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			const initialCalls = imap.searchMock.mock.calls.length;
@@ -482,10 +393,9 @@ describe("EmailListener", () => {
 		});
 
 		test("multiple mail notifications trigger independent searches", () => {
-			const listener = createListener();
 			imap.setSearchResults([]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			const initialCalls = imap.searchMock.mock.calls.length;
@@ -503,42 +413,29 @@ describe("EmailListener", () => {
 
 	describe("multiple messages", () => {
 		test("processes multiple messages from single search", async () => {
-			const listener = createListener();
 			const mailSeqnos: number[] = [];
+			imap.setSearchResults([10, 20, 30]);
+			imap.addFetchMessage("body10", 10, { ...SAMPLE_ATTRIBUTES, uid: 10 });
+			imap.addFetchMessage("body20", 20, { ...SAMPLE_ATTRIBUTES, uid: 20 });
+			imap.addFetchMessage("body30", 30, { ...SAMPLE_ATTRIBUTES, uid: 30 });
 
+			const listener = createAndConnect();
 			listener.on("mail", (_mail: any, seqno: number) => {
 				mailSeqnos.push(seqno);
 			});
 
-			imap.setSearchResults([10, 20, 30]);
-			imap.addFetchMessage("body10", 10, {
-				...SAMPLE_ATTRIBUTES,
-				uid: 10,
-			});
-			imap.addFetchMessage("body20", 20, {
-				...SAMPLE_ATTRIBUTES,
-				uid: 20,
-			});
-			imap.addFetchMessage("body30", 30, {
-				...SAMPLE_ATTRIBUTES,
-				uid: 30,
-			});
-
-			listener.start();
 			imap.emitReady();
-
 			for (let i = 0; i < 10; i++) {
-				await flushMicrotasks();
+				await new Promise((r) => setImmediate(r));
 			}
 
 			expect(mailSeqnos).toEqual([10, 20, 30]);
 		});
 
 		test("each message gets its own fetch call", () => {
-			const listener = createListener();
 			imap.setSearchResults([10, 20, 30]);
 
-			listener.start();
+			createAndConnect();
 			imap.emitReady();
 
 			expect(imap.fetchMock.mock.calls.length).toBe(3);

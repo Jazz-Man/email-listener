@@ -4,7 +4,10 @@ telemetry = false
 
 [test]
 root = "./tests"
-coverage = false
+coverage = true
+preload = ["./tests/helpers/setup.ts"]
+randomize = true
+invalidOption = true
 
 
 [install]

@@ -5,7 +5,10 @@ telemetry = false
 [test]
 root = "./tests"
 coverage = true
-preload = ["./tests/helpers/setup.ts"]
+coveragePathIgnorePatterns = [
+  "tests/helpers/**"
+]
+preload = ["./tests/helpers/mock-imap.ts"]
 randomize = true
 invalidOption = true
 

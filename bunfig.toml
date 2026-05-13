@@ -1,0 +1,33 @@
+logLevel = "debug" # "debug" | "warn" | "error"
+telemetry = false
+
+
+[test]
+root = "./tests"
+coverage = false
+
+
+[install]
+exact = true
+optional = true
+dev = true
+peer = true
+auto = "auto"
+saveTextLockfile = true
+
+[install.lockfile]
+save = true
+
+
+[console]
+depth = 3
+
+[debug]
+editor = "zed"
+
+[run]
+# default outside of Windows
+# shell = "system"
+# equivalent to `bun --bun` for all `bun run` commands
+bun = true
+silent = true

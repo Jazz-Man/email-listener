@@ -45,8 +45,6 @@ export type TSearchCriteria =
 	| ["X-GM-LABELS", string]
 	| TSearchCriteria[];
 
-export type TParsedMail = ParsedMail;
-
 export type MailOptions = {
 	markSeen?: boolean;
 	mailbox?: string;
@@ -58,7 +56,7 @@ export class EmailListener extends EventEmitter<{
 	error: [Error];
 	"server:connected": [];
 	"server:disconnected": [];
-	mail: [TParsedMail, number, ImapMessageAttributes];
+	mail: [ParsedMail, number, ImapMessageAttributes];
 }> {
 	#imap: Imap;
 
@@ -165,7 +163,7 @@ export class EmailListener extends EventEmitter<{
 			});
 
 			stream.once("end", () => {
-				simpleParser(data, (err1: Error | undefined, mail: TParsedMail) => {
+				simpleParser(data, (err1: Error | undefined, mail) => {
 					if (err1) {
 						this.emit("error", err1);
 						return;

@@ -1,10 +1,6 @@
 import { EventEmitter } from "node:events";
 
-import Imap, {
-	type Config,
-	type ImapMessage,
-	type ImapMessageAttributes,
-} from "imap";
+import Imap from "imap";
 import { type ParsedMail, simpleParser } from "mailparser";
 
 export type TSearchCriteria =
@@ -45,6 +41,10 @@ export type TSearchCriteria =
 	| ["X-GM-LABELS", string]
 	| TSearchCriteria[];
 
+type Config = Omit<Imap.Config, "keepalive"> & {
+	keepalive?: boolean | Imap.KeepAlive;
+};
+
 export type MailOptions = {
 	markSeen?: boolean;
 	mailbox?: string;
@@ -56,7 +56,7 @@ export class EmailListener extends EventEmitter<{
 	error: [Error];
 	"server:connected": [];
 	"server:disconnected": [];
-	mail: [ParsedMail, number, ImapMessageAttributes];
+	mail: [ParsedMail, number, Imap.ImapMessageAttributes];
 }> {
 	#imap: Imap;
 
@@ -153,10 +153,10 @@ export class EmailListener extends EventEmitter<{
 		});
 	}
 
-	private handleMessage(message: ImapMessage, seqno: number) {
-		let attributes: ImapMessageAttributes;
+	private handleMessage(message: Imap.ImapMessage, seqno: number) {
+		let attributes: Imap.ImapMessageAttributes;
 
-		message.on("body", (stream: NodeJS.ReadableStream) => {
+		message.on("body", (stream) => {
 			let data = "";
 			stream.on("data", (chunk) => {
 				data += chunk.toString("UTF-8");

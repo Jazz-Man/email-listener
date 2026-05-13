@@ -12,7 +12,8 @@
 		"enabled": true
 	},
 	"files": {
-		"ignoreUnknown": false
+		"ignoreUnknown": true,
+		"includes": ["**", "!package.json"]
 	},
 	"formatter": {
 		"enabled": true,

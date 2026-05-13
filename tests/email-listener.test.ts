@@ -345,26 +345,16 @@ describe("EmailListener", () => {
 			expect(searchMock).toHaveBeenCalled();
 		});
 
-		test("markSeen=false passes through to fetch options", () => {
+		test.each([
+			{ markSeen: false },
+			{ markSeen: true },
+		])("markSeen=%s passes through to fetch options", ({ markSeen }) => {
 			setSearchResults([1]);
 
-			createAndConnect({ markSeen: false });
+			createAndConnect(markSeen ? {} : { markSeen: false });
 			emitReady();
 
-			expect(fetchMock.mock.calls[0]![1]).toMatchObject({
-				markSeen: false,
-			});
-		});
-
-		test("markSeen=true (default) passes through to fetch options", () => {
-			setSearchResults([1]);
-
-			createAndConnect();
-			emitReady();
-
-			expect(fetchMock.mock.calls[0]![1]).toMatchObject({
-				markSeen: true,
-			});
+			expect(fetchMock.mock.calls[0]![1]).toMatchObject({ markSeen });
 		});
 
 		test("custom searchFilter is used in search", () => {
@@ -383,7 +373,10 @@ describe("EmailListener", () => {
 	});
 
 	describe("IMAP event notifications", () => {
-		test("mail event triggers parseUnread", () => {
+		test.each([
+			{ name: "mail", trigger: emitMail },
+			{ name: "update", trigger: emitUpdate },
+		])("$name event triggers parseUnread", ({ trigger }) => {
 			setSearchResults([]);
 
 			createAndConnect();
@@ -392,21 +385,7 @@ describe("EmailListener", () => {
 			const initialCalls = searchMock.mock.calls.length;
 
 			setSearchResults([]);
-			emitMail();
-
-			expect(searchMock.mock.calls.length).toBe(initialCalls + 1);
-		});
-
-		test("update event triggers parseUnread", () => {
-			setSearchResults([]);
-
-			createAndConnect();
-			emitReady();
-
-			const initialCalls = searchMock.mock.calls.length;
-
-			setSearchResults([]);
-			emitUpdate();
+			trigger();
 
 			expect(searchMock.mock.calls.length).toBe(initialCalls + 1);
 		});

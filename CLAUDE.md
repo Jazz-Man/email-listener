@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - **Lint/Format:** `bunx biome check src/` (lint + format check), `bunx biome check --write src/` (auto-fix)
-- **Tests:** `bun test` (test root is `./tests` per `bunfig.toml`, no tests exist yet)
+- **Tests:** `bun test` (test root is `./tests` per `bunfig.toml`, 31 tests, 100% coverage)
 - **Install:** `bun install`
 
 No build step — `package.json` `"module"` points directly to `src/index.ts`. Bun and bundlers consume the TypeScript source directly.

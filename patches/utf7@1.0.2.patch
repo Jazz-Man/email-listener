@@ -1,0 +1,278 @@
+diff --git a/package.json b/package.json
+index e08cd1d071ae3b47d0a777b2158e06021ee3b738..ee7e4ddef7bcb159f258fdbecdb219d8873bac5a 100644
+--- a/package.json
++++ b/package.json
+@@ -1,21 +1,21 @@
+ {
+-    "name": "utf7",
+-    "version": "1.0.2",
+-    "description": "Converts text to and from UTF-7 (RFC 2152 and IMAP)",
+-    "author": "Konstantin Käfer <kkaefer@gmail.com>",
+-    "licenses": [ { "type": "BSD" } ],
++	"name": "utf7",
++	"version": "1.0.2",
++	"description": "Converts text to and from UTF-7 (RFC 2152 and IMAP)",
++	"author": "Konstantin Käfer <kkaefer@gmail.com>",
++	"licenses": [
++		{
++			"type": "BSD"
++		}
++	],
+ 
+-    "main": "./utf7",
++	"main": "./utf7",
+ 
+-    "dependencies": {
+-        "semver": "~5.3.0"
+-    },
++	"devDependencies": {
++		"tape": "~4.6.0"
++	},
+ 
+-    "devDependencies": {
+-        "tape": "~4.6.0"
+-    },
+-
+-    "scripts": {
+-        "test": "tape test/*.js"
+-    }
++	"scripts": {
++		"test": "tape test/*.js"
++	}
+ }
+diff --git a/utf7.js b/utf7.js
+index 7acf44fb1ffe17dbec7457088c3ddfb2e92cd81d..24ac93a0e8a1b346d3a0ca5e35a8c3ef533cfbc4 100644
+--- a/utf7.js
++++ b/utf7.js
+@@ -1,119 +1,132 @@
+-var Buffer = require('buffer').Buffer;
+-var semver = require('semver');
+-
+-if (semver.gte(process.version, '6.0.0')) {
+-    function allocateAsciiBuffer(length) {
+-        return Buffer.alloc(length, 'ascii');
+-    }
+-} else {
+-    function allocateAsciiBuffer(length) {
+-        return new Buffer(length, 'ascii');
+-    }
++/**
++ * @param {number} length
++ * @return {Buffer | Buffer<ArrayBuffer>}
++ */
++function allocateAsciiBuffer(length) {
++	return Buffer.alloc(length, "ascii");
+ }
+ 
++/**
++ * @param {string} str
++ * @return {string}
++ */
+ function encode(str) {
+-    var b = allocateAsciiBuffer(str.length * 2);
+-    for (var i = 0, bi = 0; i < str.length; i++) {
+-        // Note that we can't simply convert a UTF-8 string to Base64 because
+-        // UTF-8 uses a different encoding. In modified UTF-7, all characters
+-        // are represented by their two byte Unicode ID.
+-        var c = str.charCodeAt(i);
+-        // Upper 8 bits shifted into lower 8 bits so that they fit into 1 byte.
+-        b[bi++] = c >> 8;
+-        // Lower 8 bits. Cut off the upper 8 bits so that they fit into 1 byte.
+-        b[bi++] = c & 0xFF;
+-    }
+-    // Modified Base64 uses , instead of / and omits trailing =.
+-    return b.toString('base64').replace(/=+$/, '');
++	const b = allocateAsciiBuffer(str.length * 2);
++	let bi = 0;
++	for (let i = 0; i < str.length; i++) {
++		const c = str.charCodeAt(i);
++		b[bi++] = c >> 8;
++		b[bi++] = c & 0xff;
++	}
++	return b.toString("base64").replace(/=+$/, "");
+ }
+ 
+-if (semver.gte(process.version, '6.0.0')) {
+-    function allocateBase64Buffer(str) {
+-        return Buffer.from(str, 'base64');
+-    }
+-} else {
+-    function allocateBase64Buffer(str) {
+-        return new Buffer(str, 'base64');
+-    }
++/**
++ * @param {string} str
++ * @return {Buffer<ArrayBuffer>}
++ */
++
++function allocateBase64Buffer(str) {
++	return Buffer.from(str, "base64");
+ }
+ 
++/**
++ * @param {string} str
++ * @return {string}
++ */
+ function decode(str) {
+-    var b = allocateBase64Buffer(str);
+-    var r = [];
+-    for (var i = 0; i < b.length;) {
+-        // Calculate charcode from two adjacent bytes.
+-        r.push(String.fromCharCode(b[i++] << 8 | b[i++]));
+-    }
+-    return r.join('');
++	const b = allocateBase64Buffer(str);
++
++	/**
++	 * @type {string[]}
++	 */
++	const r = [];
++	for (let i = 0; i < b.length; ) {
++		r.push(String.fromCharCode((b[i++] << 8) | b[i++]));
++	}
++	return r.join("");
+ }
+ 
+-// Escape RegEx from http://simonwillison.net/2006/Jan/20/escape/
++/**
++ * @param {string} chars
++ * @return {string}
++ */
+ function escape(chars) {
+-    return chars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
++	return chars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+ }
+ 
+-// Character classes defined by RFC 2152.
+-var setD = "A-Za-z0-9" + escape("'(),-./:?");
+-var setO = escape("!\"#$%&*;<=>@[]^_'{|}");
+-var setW = escape(" \r\n\t");
+-
+-// Stores compiled regexes for various replacement pattern.
+-var regexes = {};
+-var regexAll = new RegExp("[^" + setW + setD + setO + "]+", 'g');
++const setD = `A-Za-z0-9${escape("'(),-./:?")}`;
++const setO = escape("!\"#$%&*;<=>@[]^_'{|}");
++const setW = escape(" \r\n\t");
+ 
+-exports.imap = {};
++/**
++ *
++ * @type {Record<string, RegExp>}
++ */
++const regexes = {};
++const regexAll = new RegExp(`[^${setW}${setD}${setO}]+`, "g");
+ 
+-// RFC 2152 UTF-7 encoding.
+-exports.encode = function(str, mask) {
+-    // Generate a RegExp object from the string of mask characters.
+-    if (!mask) {
+-        mask = '';
+-    }
+-    if (!regexes[mask]) {
+-        regexes[mask] = new RegExp("[^" + setD + escape(mask) + "]+", 'g');
+-    }
++/**
++ * @type {{
++ *     encode: (str: string) => string;
++ *     decode: (str: string) => string;
++ * }}
++ */
++export const imap = {};
+ 
+-    // We replace subsequent disallowed chars with their escape sequence.
+-    return str.replace(regexes[mask], function(chunk) {
+-        // + is represented by an empty sequence +-, otherwise call encode().
+-        return '+' + (chunk === '+' ? '' : encode(chunk)) + '-';
+-    });
+-};
++/**
++ * @param {string} str
++ * @param {string} mask
++ * @return {string}
++ */
++export function encodeUTF7(str, mask = "") {
++	if (!regexes[mask]) {
++		regexes[mask] = new RegExp(`[^${setD}${escape(mask)}]+`, "g");
++	}
++	return str.replace(
++		regexes[mask],
++		(chunk) => `+${chunk === "+" ? "" : encode(chunk)}-`,
++	);
++}
+ 
+-// RFC 2152 UTF-7 encoding with all optionals.
+-exports.encodeAll = function(str) {
+-    // We replace subsequent disallowed chars with their escape sequence.
+-    return str.replace(regexAll, function(chunk) {
+-        // + is represented by an empty sequence +-, otherwise call encode().
+-        return '+' + (chunk === '+' ? '' : encode(chunk)) + '-';
+-    });
+-};
++/**
++ * @param {string} str
++ * @return {string}
++ */
++export function encodeUTF7All(str) {
++	return str.replace(
++		regexAll,
++		(chunk) => `+${chunk === "+" ? "" : encode(chunk)}-`,
++	);
++}
+ 
+-// RFC 3501, section 5.1.3 UTF-7 encoding.
+-exports.imap.encode = function(str) {
+-    // All printable ASCII chars except for & must be represented by themselves.
+-    // We replace subsequent non-representable chars with their escape sequence.
+-    return str.replace(/&/g, '&-').replace(/[^\x20-\x7e]+/g, function(chunk) {
+-        // & is represented by an empty sequence &-, otherwise call encode().
+-        chunk = (chunk === '&' ? '' : encode(chunk)).replace(/\//g, ',');
+-        return '&' + chunk + '-';
+-    });
+-};
++/**
++ *
++ * @param {string} str
++ * @return {string}
++ */
++imap.encode = (str) =>
++	str.replace(/&/g, "&-").replace(/[^\x20-\x7e]+/g, (chunk) => {
++		// & is represented by an empty sequence &-, otherwise call encode().
++		chunk = (chunk === "&" ? "" : encode(chunk)).replace(/\//g, ",");
++		return `&${chunk}-`;
++	});
+ 
+-// RFC 2152 UTF-7 decoding.
+-exports.decode = function(str) {
+-    return str.replace(/\+([A-Za-z0-9\/]*)-?/gi, function(_, chunk) {
+-        // &- represents &.
+-        if (chunk === '') return '+';
+-        return decode(chunk);
+-    });
+-};
++/**
++ * @param {string} str
++ * @return {string}
++ */
++export function decodeUTF7(str) {
++	return str.replace(/\+([A-Za-z0-9\/]*)-?/gi, (_, chunk) => {
++		return chunk === "" ? "+" : decode(chunk);
++	});
++}
+ 
+-// RFC 3501, section 5.1.3 UTF-7 decoding.
+-exports.imap.decode = function(str) {
+-    return str.replace(/&([^-]*)-/g, function(_, chunk) {
+-        // &- represents &.
+-        if (chunk === '') return '&';
+-        return decode(chunk.replace(/,/g, '/'));
+-    });
+-};
++/**
++ * @param {string} str
++ * @return {string}
++ */
++imap.decode = (str) =>
++	str.replace(/&([^-]*)-/g, (_, chunk) =>
++		chunk === "" ? "&" : decode(chunk.replace(/,/g, "/")),
++	);

@@ -1,16 +1,23 @@
 {
-  "name": "email-listener",
-  "module": "index.ts",
-  "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@tsconfig/bun": "^1.0.10",
-    "@types/bun": "latest",
-    "@types/imap": "^0.8.43",
-    "@types/mailparser": "^3.4.6",
-    "@types/node": "^25.7.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+	"name": "email-listener",
+	"module": "src/index.ts",
+	"type": "module",
+	"private": true,
+	"devDependencies": {
+		"@tsconfig/bun": "^1.0.10",
+		"@types/bun": "latest",
+		"@types/imap": "^0.8.43",
+		"@types/mailparser": "^3.4.6",
+		"@types/node": "^25.7.0"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"imap": "^0.8.19",
+		"mailparser": "^3.9.8"
+	},
+	"patchedDependencies": {
+		"utf7@1.0.2": "patches/utf7@1.0.2.patch"
+	}
 }

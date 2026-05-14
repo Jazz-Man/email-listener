@@ -1,0 +1,75 @@
+# This workflow will build and publish a package to GitHub Packages
+# For more information see: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry
+
+name: Publish to GitHub Packages
+
+on:
+  push:
+    branches:
+      - master
+
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      pages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          registries: |
+              https://registry.npmjs.org/
+              @jazz-man:https://npm.pkg.github.com/|$GITHUB_TOKEN
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        run: bun test
+
+      - name: Bump version and push tag
+        uses: anothrNick/github-tag-action@v1
+        id: bump
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MAJOR_STRING_TOKEN: '#major'
+          MINOR_STRING_TOKEN: '#minor'
+          PATCH_STRING_TOKEN: '#patch'
+          NONE_STRING_TOKEN: '#none'
+          TAG_PREFIX: v
+          VERBOSE: false
+
+      - name: Build Changelog
+        id: changelog
+        uses: loopwerk/tag-changelog@v1
+        with:
+          token: ${{ github.token }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ github.token }}
+          generate_release_notes: true
+          append_body: true
+          make_latest: true
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: ${{ steps.bump.outputs.tag }}
+          body: ${{ steps.changelog.outputs.changelog }}
+
+      - name: Bump version and publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bun pm version ${{ steps.bump.outputs.tag }} --no-git-tag-version
+
+          bun publish \
+            --tag ${{ steps.bump.outputs.tag }} \
+            --tolerate-republish \
+            --production

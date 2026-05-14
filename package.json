@@ -29,11 +29,13 @@
 	},
 	"private": false,
 	"publishConfig": {
+		"access": "public",
 		"registry": "https://npm.pkg.github.com"
 	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/jazz-man/email-listener.git"
 	},
-	"type": "module"
+	"type": "module",
+	"version": "0.0.0"
 }

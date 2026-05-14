@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "email-listener",
+      "name": "@jazz-man/email-listener",
       "dependencies": {
         "imap": "^0.8.19",
         "mailparser": "^3.9.8",

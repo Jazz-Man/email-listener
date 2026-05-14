@@ -4,6 +4,14 @@ A TypeScript library that connects to an IMAP server and emits parsed email obje
 
 ## Installation
 
+This package is published to [GitHub Packages](https://npm.pkg.github.com), not the public npm registry.
+
+Add this line to your project's `.npmrc` (or `~/.npmrc` for global access):
+
+```
+@jazz-man:registry=https://npm.pkg.github.com
+```
+
 ```bash
 bun add @jazz-man/email-listener
 ```

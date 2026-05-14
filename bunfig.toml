@@ -20,6 +20,7 @@ dev = true
 peer = true
 auto = "auto"
 saveTextLockfile = true
+linker = "isolated"
 
 [install.lockfile]
 save = true

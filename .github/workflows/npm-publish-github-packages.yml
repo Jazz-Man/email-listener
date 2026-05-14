@@ -76,6 +76,5 @@ jobs:
           bun pm version ${{ steps.bump.outputs.tag }} --no-git-tag-version
 
           bun publish \
-            --tag ${{ steps.bump.outputs.tag }} \
             --tolerate-republish \
             --production

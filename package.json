@@ -20,7 +20,7 @@
 	},
 	"homepage": "https://github.com/jazz-man/email-listener#readme",
 	"license": "MIT",
-	"module": "src/index.ts",
+	"module": "./src/index.ts",
 	"name": "@jazz-man/email-listener",
 	"patchedDependencies": {
 		"utf7@1.0.2": "patches/utf7@1.0.2.patch"
@@ -38,5 +38,6 @@
 		"url": "git+https://github.com/jazz-man/email-listener.git"
 	},
 	"type": "module",
+	"types": "./src/index.ts",
 	"version": "0.0.0"
 }

@@ -345,17 +345,17 @@ describe("EmailListener", () => {
 			expect(searchMock).toHaveBeenCalled();
 		});
 
-		test.each([
-			{ markSeen: false },
-			{ markSeen: true },
-		])("markSeen=%s passes through to fetch options", ({ markSeen }) => {
-			setSearchResults([1]);
+		test.each([{ markSeen: false }, { markSeen: true }])(
+			"markSeen=%s passes through to fetch options",
+			({ markSeen }) => {
+				setSearchResults([1]);
 
-			createAndConnect(markSeen ? {} : { markSeen: false });
-			emitReady();
+				createAndConnect(markSeen ? {} : { markSeen: false });
+				emitReady();
 
-			expect(fetchMock.mock.calls[0]![1]).toMatchObject({ markSeen });
-		});
+				expect(fetchMock.mock.calls[0]![1]).toMatchObject({ markSeen });
+			},
+		);
 
 		test("custom searchFilter is used in search", () => {
 			setSearchResults([]);
